@@ -31,10 +31,10 @@ jobs:
       - name: Build Docker image
         run: |
           docker build -t us-central1-docker.pkg.dev/prefab-mapper-466606-d8/hello-repo1/hello-app:latest .
-      
+
       - name: Authenticate Docker to Artifact Registry
         run: |
-          gcloud auth configure-docker us-central1-docker.pkg.dev
+          gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Push Docker image
         run: |
@@ -43,5 +43,14 @@ jobs:
       - name: Deploy to GKE
         run: |
           gcloud container clusters get-credentials my-gke --region us-central1
+
+          # If deployment doesn't exist, create it
+          if ! kubectl get deployment hello-app >/dev/null 2>&1; then
+            kubectl apply -f deployment.yaml
+          fi
+
+          # Update image
           kubectl set image deployment/hello-app hello-app=us-central1-docker.pkg.dev/prefab-mapper-466606-d8/hello-repo1/hello-app:latest
+
+          # Wait for rollout
           kubectl rollout status deployment/hello-app
