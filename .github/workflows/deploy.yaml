@@ -1,0 +1,47 @@
+name: CI/CD to GKE with WIF
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: 'read'
+  id-token: 'write'
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          workload_identity_provider: 'projects/495059377885/locations/global/workloadIdentityPools/gke-wif/providers/gke-provider'
+          service_account: 'gke-deployer@prefab-mapper-466606-d8.iam.gserviceaccount.com'
+          create_credentials_file: true
+
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v2'
+        with:
+          install_components: 'gke-gcloud-auth-plugin'
+
+      - name: Build Docker image
+        run: |
+          docker build -t us-central1-docker.pkg.dev/prefab-mapper-466606-d8/hello-repo1/hello-app:latest .
+      
+      - name: Authenticate Docker to Artifact Registry
+        run: |
+          gcloud auth configure-docker us-central1-docker.pkg.dev
+
+      - name: Push Docker image
+        run: |
+          docker push us-central1-docker.pkg.dev/prefab-mapper-466606-d8/hello-repo1/hello-app:latest
+
+      - name: Deploy to GKE
+        run: |
+          gcloud container clusters get-credentials my-gke --region us-central1
+          kubectl set image deployment/hello-app hello-app=us-central1-docker.pkg.dev/prefab-mapper-466606-d8/hello-repo1/hello-app:latest
+          kubectl rollout status deployment/hello-app
